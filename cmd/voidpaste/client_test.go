@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"net/http"
@@ -144,6 +145,69 @@ func TestClientCreateGetRawListDelete(t *testing.T) {
 		t.Fatalf("list: %v", list)
 	}
 	if err := c.DeletePaste(t.Context(), "Abcd1234Efgh5678Ijkl"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestClientCollectionsAndVersions(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/collections", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"collections": []any{map[string]any{"id": "c1", "name": "N", "visibility": "private"}},
+			})
+		case http.MethodPost:
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"collection": map[string]any{"id": "c1", "name": "N"},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	mux.HandleFunc("/api/v1/collections/c1", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"collection": map[string]any{"id": "c1", "name": "N"},
+			"items":      []any{},
+		})
+	})
+	mux.HandleFunc("/api/v1/collections/c1/pastes", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]any{"paste_id": "p1", "position": 0})
+	})
+	mux.HandleFunc("/api/v1/pastes/p1/versions", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"versions": []any{map[string]any{"version": 1, "size_bytes": 3, "created_at": "2026-01-01T00:00:00Z"}},
+		})
+	})
+	mux.HandleFunc("/api/v1/pastes/p1/versions/1/restore", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	c := &Client{Base: srv.URL, APIKey: "vp_live_test", HTTP: srv.Client()}
+	ctx := context.Background()
+	if _, err := c.ListCollections(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.CreateCollection(ctx, "N", "", "private"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.GetCollection(ctx, "c1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.AddPasteToCollection(ctx, "c1", "p1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.ListVersions(ctx, "p1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.RestoreVersion(ctx, "p1", 1); err != nil {
 		t.Fatal(err)
 	}
 }

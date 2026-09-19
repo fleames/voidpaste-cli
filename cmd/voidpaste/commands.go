@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"golang.org/x/term"
@@ -23,7 +24,7 @@ func root(args []string) error {
 		printUsage(os.Stdout)
 		return nil
 	case "version", "--version":
-		fmt.Println("voidpaste 0.1.0")
+		fmt.Println("voidpaste 0.2.0")
 		return nil
 	case "auth":
 		return cmdAuth(args[1:])
@@ -45,6 +46,10 @@ func root(args []string) error {
 		return cmdPasteList(args[1:])
 	case "delete", "rm":
 		return cmdPasteDelete(args[1:])
+	case "collection", "collections":
+		return cmdCollection(args[1:])
+	case "versions":
+		return cmdVersions(args[1:])
 	default:
 		return fmt.Errorf("unknown command %q (try `voidpaste help`)", args[0])
 	}
@@ -71,6 +76,19 @@ Pastes:
   voidpaste delete <id>                  Delete a paste you own
 
   voidpaste paste <subcommand>           Same as the shortcuts above
+
+Collections (API key required):
+  voidpaste collection list
+  voidpaste collection create --name NAME [--visibility private]
+  voidpaste collection get <id>
+  voidpaste collection delete <id>
+  voidpaste collection add <id> <pasteId>
+  voidpaste collection remove <id> <pasteId>
+
+Versions (API key required):
+  voidpaste versions list <pasteId>
+  voidpaste versions get <pasteId> <n>
+  voidpaste versions restore <pasteId> <n>
 
 Status:
   voidpaste status                       API /health (+ whoami when keyed)
@@ -594,6 +612,339 @@ func cmdPasteDelete(args []string) error {
 		return err
 	}
 	fmt.Println("deleted")
+	return nil
+}
+
+func cmdCollection(args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: voidpaste collection <list|create|get|delete|add|remove>")
+	}
+	switch args[0] {
+	case "list", "ls":
+		return cmdCollectionList(args[1:])
+	case "create":
+		return cmdCollectionCreate(args[1:])
+	case "get":
+		return cmdCollectionGet(args[1:])
+	case "delete", "rm":
+		return cmdCollectionDelete(args[1:])
+	case "add":
+		return cmdCollectionAdd(args[1:])
+	case "remove":
+		return cmdCollectionRemove(args[1:])
+	default:
+		return fmt.Errorf("unknown collection command %q", args[0])
+	}
+}
+
+func cmdCollectionList(args []string) error {
+	fs := flag.NewFlagSet("collection list", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	api, key, jsonOut, _, err := parseGlobal(fs, args)
+	if err != nil {
+		return err
+	}
+	cfg, err := resolve(api, key)
+	if err != nil {
+		return err
+	}
+	if err := requireKey(cfg); err != nil {
+		return err
+	}
+	out, err := NewClient(cfg).ListCollections(context.Background())
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		return printJSON(out)
+	}
+	cols, _ := out["collections"].([]any)
+	for _, c := range cols {
+		m, _ := c.(map[string]any)
+		if m == nil {
+			continue
+		}
+		fmt.Printf("%v  %v  %v\n", m["id"], m["visibility"], m["name"])
+	}
+	return nil
+}
+
+func cmdCollectionCreate(args []string) error {
+	fs := flag.NewFlagSet("collection create", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	var api, key, name, desc, visibility string
+	var jsonOut bool
+	fs.StringVar(&api, "api", "", "")
+	fs.StringVar(&key, "key", "", "")
+	fs.StringVar(&name, "name", "", "collection name")
+	fs.StringVar(&desc, "description", "", "description")
+	fs.StringVar(&visibility, "visibility", "private", "public|unlisted|private")
+	fs.BoolVar(&jsonOut, "json", false, "print JSON")
+	if _, err := parseFlagsAllowInterspersed(fs, args); err != nil {
+		return err
+	}
+	if name == "" {
+		return errors.New("--name is required")
+	}
+	cfg, err := resolve(api, key)
+	if err != nil {
+		return err
+	}
+	if err := requireKey(cfg); err != nil {
+		return err
+	}
+	out, err := NewClient(cfg).CreateCollection(context.Background(), name, desc, visibility)
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		return printJSON(out)
+	}
+	col, _ := out["collection"].(map[string]any)
+	if col == nil {
+		return printJSON(out)
+	}
+	fmt.Printf("created %v  %v\n", col["id"], col["name"])
+	return nil
+}
+
+func cmdCollectionGet(args []string) error {
+	fs := flag.NewFlagSet("collection get", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	api, key, jsonOut, rest, err := parseGlobal(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(rest) != 1 {
+		return errors.New("usage: voidpaste collection get <id>")
+	}
+	cfg, err := resolve(api, key)
+	if err != nil {
+		return err
+	}
+	if err := requireKey(cfg); err != nil {
+		return err
+	}
+	out, err := NewClient(cfg).GetCollection(context.Background(), rest[0])
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		return printJSON(out)
+	}
+	col, _ := out["collection"].(map[string]any)
+	if col != nil {
+		fmt.Printf("id:     %v\n", col["id"])
+		fmt.Printf("name:   %v\n", col["name"])
+		fmt.Printf("vis:    %v\n", col["visibility"])
+	}
+	items, _ := out["items"].([]any)
+	for _, it := range items {
+		m, _ := it.(map[string]any)
+		if m == nil {
+			continue
+		}
+		fmt.Printf("  paste %v  pos %v\n", m["paste_id"], m["position"])
+	}
+	return nil
+}
+
+func cmdCollectionDelete(args []string) error {
+	fs := flag.NewFlagSet("collection delete", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	var api, key string
+	var yes bool
+	fs.StringVar(&api, "api", "", "")
+	fs.StringVar(&key, "key", "", "")
+	fs.BoolVar(&yes, "yes", false, "confirm")
+	fs.BoolVar(&yes, "y", false, "confirm")
+	rest, err := parseFlagsAllowInterspersed(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(rest) != 1 {
+		return errors.New("usage: voidpaste collection delete <id> --yes")
+	}
+	if !yes {
+		return errors.New("refusing to delete without --yes")
+	}
+	cfg, err := resolve(api, key)
+	if err != nil {
+		return err
+	}
+	if err := requireKey(cfg); err != nil {
+		return err
+	}
+	if err := NewClient(cfg).DeleteCollection(context.Background(), rest[0]); err != nil {
+		return err
+	}
+	fmt.Println("deleted")
+	return nil
+}
+
+func cmdCollectionAdd(args []string) error {
+	fs := flag.NewFlagSet("collection add", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	api, key, jsonOut, rest, err := parseGlobal(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(rest) != 2 {
+		return errors.New("usage: voidpaste collection add <collectionId> <pasteId>")
+	}
+	cfg, err := resolve(api, key)
+	if err != nil {
+		return err
+	}
+	if err := requireKey(cfg); err != nil {
+		return err
+	}
+	out, err := NewClient(cfg).AddPasteToCollection(context.Background(), rest[0], rest[1])
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		return printJSON(out)
+	}
+	fmt.Printf("added %v to %v\n", rest[1], rest[0])
+	return nil
+}
+
+func cmdCollectionRemove(args []string) error {
+	fs := flag.NewFlagSet("collection remove", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	api, key, _, rest, err := parseGlobal(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(rest) != 2 {
+		return errors.New("usage: voidpaste collection remove <collectionId> <pasteId>")
+	}
+	cfg, err := resolve(api, key)
+	if err != nil {
+		return err
+	}
+	if err := requireKey(cfg); err != nil {
+		return err
+	}
+	if err := NewClient(cfg).RemovePasteFromCollection(context.Background(), rest[0], rest[1]); err != nil {
+		return err
+	}
+	fmt.Println("removed")
+	return nil
+}
+
+func cmdVersions(args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: voidpaste versions <list|get|restore>")
+	}
+	switch args[0] {
+	case "list", "ls":
+		return cmdVersionsList(args[1:])
+	case "get":
+		return cmdVersionsGet(args[1:])
+	case "restore":
+		return cmdVersionsRestore(args[1:])
+	default:
+		return fmt.Errorf("unknown versions command %q", args[0])
+	}
+}
+
+func cmdVersionsList(args []string) error {
+	fs := flag.NewFlagSet("versions list", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	api, key, jsonOut, rest, err := parseGlobal(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(rest) != 1 {
+		return errors.New("usage: voidpaste versions list <pasteId>")
+	}
+	cfg, err := resolve(api, key)
+	if err != nil {
+		return err
+	}
+	if err := requireKey(cfg); err != nil {
+		return err
+	}
+	out, err := NewClient(cfg).ListVersions(context.Background(), rest[0])
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		return printJSON(out)
+	}
+	versions, _ := out["versions"].([]any)
+	for _, v := range versions {
+		m, _ := v.(map[string]any)
+		if m == nil {
+			continue
+		}
+		fmt.Printf("v%v  %v bytes  %v\n", m["version"], m["size_bytes"], m["created_at"])
+	}
+	return nil
+}
+
+func cmdVersionsGet(args []string) error {
+	fs := flag.NewFlagSet("versions get", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	api, key, jsonOut, rest, err := parseGlobal(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(rest) != 2 {
+		return errors.New("usage: voidpaste versions get <pasteId> <n>")
+	}
+	n, err := strconv.Atoi(rest[1])
+	if err != nil {
+		return fmt.Errorf("version number: %w", err)
+	}
+	cfg, err := resolve(api, key)
+	if err != nil {
+		return err
+	}
+	if err := requireKey(cfg); err != nil {
+		return err
+	}
+	out, err := NewClient(cfg).GetVersion(context.Background(), rest[0], n)
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		return printJSON(out)
+	}
+	return printJSON(out)
+}
+
+func cmdVersionsRestore(args []string) error {
+	fs := flag.NewFlagSet("versions restore", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	api, key, jsonOut, rest, err := parseGlobal(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(rest) != 2 {
+		return errors.New("usage: voidpaste versions restore <pasteId> <n>")
+	}
+	n, err := strconv.Atoi(rest[1])
+	if err != nil {
+		return fmt.Errorf("version number: %w", err)
+	}
+	cfg, err := resolve(api, key)
+	if err != nil {
+		return err
+	}
+	if err := requireKey(cfg); err != nil {
+		return err
+	}
+	out, err := NewClient(cfg).RestoreVersion(context.Background(), rest[0], n)
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		return printJSON(out)
+	}
+	fmt.Printf("restored version %d of %s\n", n, rest[0])
 	return nil
 }
 

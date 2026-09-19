@@ -1,26 +1,42 @@
-﻿# VoidPaste CLI
+# VoidPaste CLI
 
-Command-line client for [VoidPaste](https://voidpaste.com) — create, fetch, list, and delete pastes against the production API (or any self-hosted origin).
+Command-line client for [VoidPaste](https://voidpaste.com).
 
-Docs: https://voidpaste.com/docs/cli
+## Public install (recommended)
 
-## Install
-
-Requires [Go](https://go.dev/dl/) 1.23+.
+The installable Go module lives in the **public** repo
+[`fleames/voidpaste-cli`](https://github.com/fleames/voidpaste-cli)
+(MIT). Outsiders cannot `go install` from this private monorepo.
 
 ```bash
 go install github.com/fleames/voidpaste-cli/cmd/voidpaste@latest
 ```
 
-Or build from this repo:
+Docs: https://voidpaste.com/docs/cli
+
+## Monorepo development copy
+
+`apps/cli` is the **development copy** for VoidPaste contributors who have
+access to the private monorepo. Keep it in sync with
+`github.com/fleames/voidpaste-cli` when changing CLI behavior.
+
+- **Canonical for releases / `go install`:** `fleames/voidpaste-cli`
+- **Canonical for day-to-day product work:** this tree (then publish a sync)
+
+### Build locally
 
 ```bash
-git clone https://github.com/fleames/voidpaste-cli.git
-cd voidpaste-cli
-go build -o voidpaste ./cmd/voidpaste
+go build -C apps/cli -o voidpaste ./cmd/voidpaste
+# Windows: go build -C apps/cli -o voidpaste.exe ./cmd/voidpaste
 ```
 
-Put `voidpaste` on your `PATH`.
+### Publish a sync to the public repo
+
+Copy `cmd/voidpaste/*`, `go.mod` (module path
+`github.com/fleames/voidpaste-cli`), and `go.sum` into a checkout of
+`fleames/voidpaste-cli`, run `go test ./...`, commit, tag, and push.
+Bump the install help string in `commands.go` if it still points at the
+private path.
 
 ## Auth
 
@@ -67,6 +83,13 @@ voidpaste raw PASTE_ID --password 'secret'   # password pastes
 voidpaste list
 voidpaste delete PASTE_ID --yes
 
+# Collections / versions (API key required)
+voidpaste collection list
+voidpaste collection create --name "Snippets" --visibility private
+voidpaste collection add COLLECTION_ID PASTE_ID
+voidpaste versions list PASTE_ID
+voidpaste versions restore PASTE_ID 2
+
 # Health / identity
 voidpaste status
 voidpaste whoami
@@ -74,14 +97,27 @@ voidpaste whoami
 
 Paste create flags: `--visibility`, `--expiration` / `--expires`, `--password`, `--burn`, `--language` / `--lang`, `--title`, `--stdin`, `--json`.
 
-## Development
+## API surface used
 
-The VoidPaste monorepo (`fleames/voidpaste`, private) may keep a working copy under `apps/cli` for contributors. **This public repo is the installable source of truth** for `go install` and tagged releases.
+| CLI | HTTP |
+|-----|------|
+| `status` | `GET /health`, optional `GET /api/v1/auth/me` |
+| `whoami` | `GET /api/v1/auth/me` |
+| `create` | `POST /api/v1/pastes` |
+| `get` | `GET /api/v1/pastes/{id}` |
+| `raw` | `GET /raw/{id}` |
+| `download` | `GET /download/{id}` |
+| `list` | `GET /api/v1/me/pastes` |
+| `delete` | `DELETE /api/v1/pastes/{id}` |
+| `collection *` | `/api/v1/collections…` |
+| `versions *` | `/api/v1/pastes/{id}/versions…` |
+
+Auth header: `Authorization: Bearer vp_live_…`. Password pastes: `X-Paste-Password`.
+
+Not implemented (no fake stubs): billing, moderation — use the [API docs](https://voidpaste.com/docs/api) or web dashboard.
+
+## Tests
 
 ```bash
-go test ./...
+cd apps/cli && go test ./...
 ```
-
-## License
-
-MIT

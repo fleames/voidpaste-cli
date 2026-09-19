@@ -230,3 +230,108 @@ func (c *Client) DeletePaste(ctx context.Context, id string) error {
 	_, _, err := c.do(ctx, http.MethodDelete, "/api/v1/pastes/"+url.PathEscape(id), nil, nil)
 	return err
 }
+
+func (c *Client) ListVersions(ctx context.Context, pasteID string) (map[string]any, error) {
+	_, data, err := c.do(ctx, http.MethodGet, "/api/v1/pastes/"+url.PathEscape(pasteID)+"/versions", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]any
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *Client) GetVersion(ctx context.Context, pasteID string, version int) (map[string]any, error) {
+	path := fmt.Sprintf("/api/v1/pastes/%s/versions/%d", url.PathEscape(pasteID), version)
+	_, data, err := c.do(ctx, http.MethodGet, path, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]any
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *Client) RestoreVersion(ctx context.Context, pasteID string, version int) (map[string]any, error) {
+	path := fmt.Sprintf("/api/v1/pastes/%s/versions/%d/restore", url.PathEscape(pasteID), version)
+	_, data, err := c.do(ctx, http.MethodPost, path, map[string]any{}, nil)
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]any
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *Client) ListCollections(ctx context.Context) (map[string]any, error) {
+	_, data, err := c.do(ctx, http.MethodGet, "/api/v1/collections", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]any
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *Client) GetCollection(ctx context.Context, id string) (map[string]any, error) {
+	_, data, err := c.do(ctx, http.MethodGet, "/api/v1/collections/"+url.PathEscape(id), nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]any
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *Client) CreateCollection(ctx context.Context, name, description, visibility string) (map[string]any, error) {
+	body := map[string]any{"name": name}
+	if description != "" {
+		body["description"] = description
+	}
+	if visibility != "" {
+		body["visibility"] = visibility
+	}
+	_, data, err := c.do(ctx, http.MethodPost, "/api/v1/collections", body, nil)
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]any
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *Client) DeleteCollection(ctx context.Context, id string) error {
+	_, _, err := c.do(ctx, http.MethodDelete, "/api/v1/collections/"+url.PathEscape(id), nil, nil)
+	return err
+}
+
+func (c *Client) AddPasteToCollection(ctx context.Context, collectionID, pasteID string) (map[string]any, error) {
+	body := map[string]any{"paste_id": pasteID}
+	_, data, err := c.do(ctx, http.MethodPost, "/api/v1/collections/"+url.PathEscape(collectionID)+"/pastes", body, nil)
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]any
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *Client) RemovePasteFromCollection(ctx context.Context, collectionID, pasteID string) error {
+	path := "/api/v1/collections/" + url.PathEscape(collectionID) + "/pastes/" + url.PathEscape(pasteID)
+	_, _, err := c.do(ctx, http.MethodDelete, path, nil, nil)
+	return err
+}
