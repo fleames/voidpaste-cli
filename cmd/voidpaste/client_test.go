@@ -118,7 +118,7 @@ func TestClientCreateGetRawListDelete(t *testing.T) {
 	if user["email"] != "cli@voidpaste.com" {
 		t.Fatalf("me: %v", me)
 	}
-	created, err := c.CreatePaste(t.Context(), CreatePasteInput{Content: "hello", Visibility: "unlisted"})
+	created, err := c.CreatePaste(t.Context(), CreatePasteInput{Content: "hello", Visibility: "unlisted"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}

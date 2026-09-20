@@ -24,7 +24,7 @@ func root(args []string) error {
 		printUsage(os.Stdout)
 		return nil
 	case "version", "--version":
-		fmt.Println("voidpaste 0.2.0")
+		fmt.Println("voidpaste 0.3.0")
 		return nil
 	case "auth":
 		return cmdAuth(args[1:])
@@ -77,6 +77,13 @@ Pastes:
 
   voidpaste paste <subcommand>           Same as the shortcuts above
 
+Create flags:
+  --quiet / -q           Print only the share URL
+  --idempotency-key KEY  Idempotency-Key header (24h replay)
+  --json                 Print full {paste, warnings} envelope
+  --expiration / --expires, --burn, --visibility, --password
+  --title, --language / --lang, --stdin
+
 Collections (API key required):
   voidpaste collection list
   voidpaste collection create --name NAME [--visibility private]
@@ -99,7 +106,7 @@ Global flags (after the command):
   --json        Print raw JSON where applicable
 
 Install:
-  go install github.com/fleames/voidpaste-cli/cmd/voidpaste@latest
+  go install github.com/fleames/voidpaste-cli/cmd/voidpaste@v0.3.0
 
 Config file: $XDG_CONFIG_HOME/voidpaste/config.json (or %%AppData%%\voidpaste on Windows)
 Env: VP_API_KEY, VP_API, VP_TOKEN (alias), VP_CONFIG_DIR
@@ -348,8 +355,8 @@ func cmdPasteCreate(args []string) error {
 	fs := flag.NewFlagSet("create", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	var (
-		api, key, title, language, visibility, expiration, password string
-		burn, useStdin, jsonOut                                     bool
+		api, key, title, language, visibility, expiration, password, idemKey string
+		burn, useStdin, jsonOut, quiet                                       bool
 	)
 	fs.StringVar(&api, "api", "", "")
 	fs.StringVar(&key, "key", "", "")
@@ -360,12 +367,18 @@ func cmdPasteCreate(args []string) error {
 	fs.StringVar(&expiration, "expiration", "", "e.g. 1h, 1d, 1w, 1M, never")
 	fs.StringVar(&expiration, "expires", "", "alias of --expiration")
 	fs.StringVar(&password, "password", "", "paste password (requires --visibility=password)")
+	fs.StringVar(&idemKey, "idempotency-key", "", "Idempotency-Key header (max 256 chars)")
 	fs.BoolVar(&burn, "burn", false, "burn after reading")
 	fs.BoolVar(&useStdin, "stdin", false, "read content from stdin")
-	fs.BoolVar(&jsonOut, "json", false, "print full JSON response")
+	fs.BoolVar(&jsonOut, "json", false, "print full JSON response ({paste, warnings})")
+	fs.BoolVar(&quiet, "quiet", false, "print only the share URL")
+	fs.BoolVar(&quiet, "q", false, "alias of --quiet")
 	positionals, err := parseFlagsAllowInterspersed(fs, args)
 	if err != nil {
 		return err
+	}
+	if quiet && jsonOut {
+		return errors.New("use either --quiet or --json, not both")
 	}
 	cfg, err := resolve(api, key)
 	if err != nil {
@@ -390,7 +403,7 @@ func cmdPasteCreate(args []string) error {
 		BurnAfterReading: burn,
 		Content:          content,
 	}
-	out, err := NewClient(cfg).CreatePaste(context.Background(), in)
+	out, err := NewClient(cfg).CreatePaste(context.Background(), in, idemKey)
 	if err != nil {
 		return err
 	}
@@ -402,9 +415,17 @@ func cmdPasteCreate(args []string) error {
 		return printJSON(out)
 	}
 	id, _ := paste["id"].(string)
-	fmt.Println(id)
-	fmt.Printf("%s/p/%s\n", strings.TrimRight(cfg.APIBase, "/"), id)
+	shareURL := fmt.Sprintf("%s/p/%s", strings.TrimRight(cfg.APIBase, "/"), id)
+	if quiet {
+		fmt.Println(shareURL)
+	} else {
+		fmt.Println(id)
+		fmt.Println(shareURL)
+	}
 	if warnings, ok := out["warnings"]; ok && warnings != nil {
+		if arr, ok := warnings.([]any); ok && len(arr) == 0 {
+			return nil
+		}
 		fmt.Fprintf(os.Stderr, "warnings: %v\n", warnings)
 	}
 	return nil

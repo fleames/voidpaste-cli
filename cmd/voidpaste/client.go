@@ -68,7 +68,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any, headers 
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Accept", "application/json, text/plain, */*")
-	req.Header.Set("User-Agent", "voidpaste-cli/0.1")
+	req.Header.Set("User-Agent", "voidpaste-cli/0.3")
 	if c.APIKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.APIKey)
 	}
@@ -143,8 +143,12 @@ type CreatePasteInput struct {
 	Content          string `json:"content"`
 }
 
-func (c *Client) CreatePaste(ctx context.Context, in CreatePasteInput) (map[string]any, error) {
-	_, data, err := c.do(ctx, http.MethodPost, "/api/v1/pastes", in, nil)
+func (c *Client) CreatePaste(ctx context.Context, in CreatePasteInput, idempotencyKey string) (map[string]any, error) {
+	headers := map[string]string{}
+	if idempotencyKey != "" {
+		headers["Idempotency-Key"] = idempotencyKey
+	}
+	_, data, err := c.do(ctx, http.MethodPost, "/api/v1/pastes", in, headers)
 	if err != nil {
 		return nil, err
 	}

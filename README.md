@@ -9,12 +9,18 @@ The installable Go module lives in the **public** repo
 (MIT). Outsiders cannot `go install` from this private monorepo.
 
 ```bash
-go install github.com/fleames/voidpaste-cli/cmd/voidpaste@latest
+go install github.com/fleames/voidpaste-cli/cmd/voidpaste@v0.3.0
+
+# Optional short alias (same binary)
+ln -sf "$(which voidpaste)" "$(dirname "$(which voidpaste)")/vp"
 ```
 
-Docs: https://voidpaste.com/docs/cli
+Docs: https://voidpaste.com/docs/cli · Integrations: https://voidpaste.com/docs/integrations
 
-## Monorepo development copy
+Both `voidpaste` and `vp` (when symlinked) run the same CLI. There is no separate
+`vp` install path yet — do not invent commands that are not implemented.
+
+## This directory (monorepo)
 
 `apps/cli` is the **development copy** for VoidPaste contributors who have
 access to the private monorepo. Keep it in sync with
@@ -95,7 +101,7 @@ voidpaste status
 voidpaste whoami
 ```
 
-Paste create flags: `--visibility`, `--expiration` / `--expires`, `--password`, `--burn`, `--language` / `--lang`, `--title`, `--stdin`, `--json`.
+Paste create flags: `--visibility`, `--expiration` / `--expires`, `--password`, `--burn`, `--language` / `--lang`, `--title`, `--stdin`, `--quiet` / `-q` (URL only), `--idempotency-key`, `--json` (`{paste, warnings}`).
 
 ## API surface used
 
