@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -67,6 +68,12 @@ func TestClientCreateGetRawListDelete(t *testing.T) {
 		if r.Method != http.MethodPost {
 			http.NotFound(w, r)
 			return
+		}
+		if got := r.Header.Get("X-VoidPaste-Client"); got != "cli" {
+			t.Errorf("X-VoidPaste-Client = %q", got)
+		}
+		if got := r.UserAgent(); got != "voidpaste-cli/"+version {
+			t.Errorf("User-Agent = %q", got)
 		}
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
@@ -236,6 +243,75 @@ func TestRootHelp(t *testing.T) {
 	if err := root([]string{"help"}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestVersionOutput(t *testing.T) {
+	oldVersion, oldCommit, oldDate := version, commit, buildDate
+	t.Cleanup(func() { version, commit, buildDate = oldVersion, oldCommit, oldDate })
+	version, commit, buildDate = "v0.4.0", "abc123", "2026-10-10T09:00:00Z"
+	got := versionOutput()
+	for _, want := range []string{"voidpaste v0.4.0", "commit: abc123", "built: 2026-10-10T09:00:00Z"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("version output %q missing %q", got, want)
+		}
+	}
+}
+
+func TestCreateJSONAndQuietOutput(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = io.WriteString(w, `{"paste":{"id":"Abcd1234Efgh5678Ijkl"},"warnings":[]}`)
+	}))
+	defer srv.Close()
+
+	input := filepath.Join(t.TempDir(), "paste.txt")
+	if err := os.WriteFile(input, []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("VP_API_KEY", "")
+	t.Setenv("VP_TOKEN", "")
+	t.Setenv("VP_CONFIG_DIR", t.TempDir())
+
+	quiet := captureStdout(t, func() error {
+		return cmdPasteCreate([]string{input, "--api", srv.URL, "--quiet"})
+	})
+	if quiet != srv.URL+"/p/Abcd1234Efgh5678Ijkl\n" {
+		t.Fatalf("quiet output = %q", quiet)
+	}
+
+	jsonOut := captureStdout(t, func() error {
+		return cmdPasteCreate([]string{input, "--api", srv.URL, "--json"})
+	})
+	var envelope map[string]any
+	if err := json.Unmarshal([]byte(jsonOut), &envelope); err != nil {
+		t.Fatalf("JSON output = %q: %v", jsonOut, err)
+	}
+	if _, ok := envelope["paste"]; !ok {
+		t.Fatalf("JSON output missing paste: %v", envelope)
+	}
+}
+
+func captureStdout(t *testing.T, fn func() error) string {
+	t.Helper()
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	t.Cleanup(func() { os.Stdout = old })
+	callErr := fn()
+	_ = w.Close()
+	os.Stdout = old
+	data, readErr := io.ReadAll(r)
+	_ = r.Close()
+	if callErr != nil {
+		t.Fatal(callErr)
+	}
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	return string(data)
 }
 
 func TestSaveConfigPermissions(t *testing.T) {

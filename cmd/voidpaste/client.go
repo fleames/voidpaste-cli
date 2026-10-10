@@ -68,7 +68,8 @@ func (c *Client) do(ctx context.Context, method, path string, body any, headers 
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Accept", "application/json, text/plain, */*")
-	req.Header.Set("User-Agent", "voidpaste-cli/0.3")
+	req.Header.Set("X-VoidPaste-Client", "cli")
+	req.Header.Set("User-Agent", "voidpaste-cli/"+effectiveVersion())
 	if c.APIKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.APIKey)
 	}

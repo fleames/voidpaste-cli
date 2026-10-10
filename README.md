@@ -2,18 +2,53 @@
 
 Command-line client for [VoidPaste](https://voidpaste.com).
 
-## Public install (recommended)
+## Install
 
-The installable Go module lives in the **public** repo
-[`fleames/voidpaste-cli`](https://github.com/fleames/voidpaste-cli)
-(MIT). Outsiders cannot `go install` from this private monorepo.
+Download the archive for your OS and architecture from
+[GitHub Releases](https://github.com/fleames/voidpaste-cli/releases/latest).
+Every release includes `SHA256SUMS`, an SPDX JSON SBOM, and GitHub build
+provenance. Verify the checksum before extracting:
 
 ```bash
-go install github.com/fleames/voidpaste-cli/cmd/voidpaste@v0.3.0
+# Linux amd64 example (change OS/architecture as needed)
+version=v0.4.0
+curl -fLO "https://github.com/fleames/voidpaste-cli/releases/download/${version}/voidpaste_${version}_linux_amd64.tar.gz"
+curl -fLO "https://github.com/fleames/voidpaste-cli/releases/download/${version}/SHA256SUMS"
+grep "voidpaste_${version}_linux_amd64.tar.gz" SHA256SUMS | sha256sum -c -
+tar -xzf "voidpaste_${version}_linux_amd64.tar.gz"
+install -m 0755 "voidpaste_${version}_linux_amd64/voidpaste" "$HOME/.local/bin/voidpaste"
+voidpaste version
+```
+
+```powershell
+# Windows amd64 example
+$version = "v0.4.0"
+$archive = "voidpaste_${version}_windows_amd64.zip"
+Invoke-WebRequest "https://github.com/fleames/voidpaste-cli/releases/download/$version/$archive" -OutFile $archive
+Invoke-WebRequest "https://github.com/fleames/voidpaste-cli/releases/download/$version/SHA256SUMS" -OutFile SHA256SUMS
+$expected = ((Select-String -Path SHA256SUMS -Pattern ([regex]::Escape($archive))).Line -split '\s+')[0]
+$actual = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actual -ne $expected) { throw "checksum mismatch" }
+Expand-Archive $archive -DestinationPath .
+```
+
+With the GitHub CLI, the cryptographically signed provenance can also be checked:
+
+```bash
+gh attestation verify "voidpaste_v0.4.0_linux_amd64.tar.gz" --repo fleames/voidpaste-cli
+```
+
+`go install` remains supported for users with Go 1.23+:
+
+```bash
+go install github.com/fleames/voidpaste-cli/cmd/voidpaste@v0.4.0
 
 # Optional short alias (same binary)
 ln -sf "$(which voidpaste)" "$(dirname "$(which voidpaste)")/vp"
 ```
+
+Homebrew, Scoop, and winget packages are not published yet; package-manager
+commands will be documented only after their manifests are accepted.
 
 Docs: https://voidpaste.com/docs/cli · Integrations: https://voidpaste.com/docs/integrations
 

@@ -24,7 +24,7 @@ func root(args []string) error {
 		printUsage(os.Stdout)
 		return nil
 	case "version", "--version":
-		fmt.Println("voidpaste 0.3.0")
+		fmt.Println(versionOutput())
 		return nil
 	case "auth":
 		return cmdAuth(args[1:])
@@ -106,7 +106,7 @@ Global flags (after the command):
   --json        Print raw JSON where applicable
 
 Install:
-  go install github.com/fleames/voidpaste-cli/cmd/voidpaste@v0.3.0
+  go install github.com/fleames/voidpaste-cli/cmd/voidpaste@latest
 
 Config file: $XDG_CONFIG_HOME/voidpaste/config.json (or %%AppData%%\voidpaste on Windows)
 Env: VP_API_KEY, VP_API, VP_TOKEN (alias), VP_CONFIG_DIR
