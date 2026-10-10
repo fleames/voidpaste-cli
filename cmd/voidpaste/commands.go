@@ -81,6 +81,8 @@ Create flags:
   --quiet / -q           Print only the share URL
   --idempotency-key KEY  Idempotency-Key header (24h replay)
   --json                 Print full {paste, warnings} envelope
+  --include-management-token
+                         Include the one-time anonymous management token in output
   --expiration / --expires, --burn, --visibility, --password
   --title, --language / --lang, --stdin
 
@@ -356,7 +358,7 @@ func cmdPasteCreate(args []string) error {
 	fs.SetOutput(io.Discard)
 	var (
 		api, key, title, language, visibility, expiration, password, idemKey string
-		burn, useStdin, jsonOut, quiet                                       bool
+		burn, useStdin, jsonOut, quiet, includeManagementToken               bool
 	)
 	fs.StringVar(&api, "api", "", "")
 	fs.StringVar(&key, "key", "", "")
@@ -373,6 +375,7 @@ func cmdPasteCreate(args []string) error {
 	fs.BoolVar(&jsonOut, "json", false, "print full JSON response ({paste, warnings})")
 	fs.BoolVar(&quiet, "quiet", false, "print only the share URL")
 	fs.BoolVar(&quiet, "q", false, "alias of --quiet")
+	fs.BoolVar(&includeManagementToken, "include-management-token", false, "print the one-time anonymous management token")
 	positionals, err := parseFlagsAllowInterspersed(fs, args)
 	if err != nil {
 		return err
@@ -408,6 +411,9 @@ func cmdPasteCreate(args []string) error {
 		return err
 	}
 	if jsonOut {
+		if !includeManagementToken {
+			delete(out, "management_token")
+		}
 		return printJSON(out)
 	}
 	paste, _ := out["paste"].(map[string]any)
@@ -421,6 +427,11 @@ func cmdPasteCreate(args []string) error {
 	} else {
 		fmt.Println(id)
 		fmt.Println(shareURL)
+	}
+	if includeManagementToken {
+		if token, ok := out["management_token"].(string); ok && token != "" {
+			fmt.Fprintf(os.Stderr, "management_token: %s\n", token)
+		}
 	}
 	if warnings, ok := out["warnings"]; ok && warnings != nil {
 		if arr, ok := warnings.([]any); ok && len(arr) == 0 {
@@ -439,9 +450,12 @@ func readContent(positional []string, forceStdin bool) (string, error) {
 		if !forceStdin && term.IsTerminal(int(os.Stdin.Fd())) {
 			return "", errors.New("no file given and stdin is a terminal; pass a path or pipe content / --stdin")
 		}
-		b, err := io.ReadAll(io.LimitReader(os.Stdin, 2<<20))
+		b, err := io.ReadAll(io.LimitReader(os.Stdin, 5<<20+1))
 		if err != nil {
 			return "", err
+		}
+		if len(b) > 5<<20 {
+			return "", errors.New("content exceeds 5 MB paste limit")
 		}
 		if len(b) == 0 {
 			return "", errors.New("empty content")
@@ -458,8 +472,8 @@ func readContent(positional []string, forceStdin bool) (string, error) {
 	if len(b) == 0 {
 		return "", errors.New("empty file")
 	}
-	if len(b) > 1<<20 {
-		return "", errors.New("file exceeds 1 MB paste limit")
+	if len(b) > 5<<20 {
+		return "", errors.New("file exceeds 5 MB paste limit")
 	}
 	return string(b), nil
 }

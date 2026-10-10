@@ -11,7 +11,7 @@ provenance. Verify the checksum before extracting:
 
 ```bash
 # Linux amd64 example (change OS/architecture as needed)
-version=v0.4.0
+version=v0.4.1
 curl -fLO "https://github.com/fleames/voidpaste-cli/releases/download/${version}/voidpaste_${version}_linux_amd64.tar.gz"
 curl -fLO "https://github.com/fleames/voidpaste-cli/releases/download/${version}/SHA256SUMS"
 grep "voidpaste_${version}_linux_amd64.tar.gz" SHA256SUMS | sha256sum -c -
@@ -35,13 +35,13 @@ Expand-Archive $archive -DestinationPath .
 With the GitHub CLI, the cryptographically signed provenance can also be checked:
 
 ```bash
-gh attestation verify "voidpaste_v0.4.0_linux_amd64.tar.gz" --repo fleames/voidpaste-cli
+gh attestation verify "voidpaste_v0.4.1_linux_amd64.tar.gz" --repo fleames/voidpaste-cli
 ```
 
 `go install` remains supported for users with Go 1.23+:
 
 ```bash
-go install github.com/fleames/voidpaste-cli/cmd/voidpaste@v0.4.0
+go install github.com/fleames/voidpaste-cli/cmd/voidpaste@v0.4.1
 
 # Optional short alias (same binary)
 ln -sf "$(which voidpaste)" "$(dirname "$(which voidpaste)")/vp"
