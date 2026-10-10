@@ -1,0 +1,57 @@
+name: Update package repositories
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish
+        required: true
+        default: v0.4.1
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    if: startsWith(github.event.release.tag_name || inputs.tag, 'v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read and dispatch verified release hashes
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGE_REPOS_TOKEN }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          test -n "${GH_TOKEN}" || {
+            echo "::error::PACKAGE_REPOS_TOKEN is not configured"
+            exit 1
+          }
+          version="${TAG#v}"
+          sums="$(curl --fail --silent --show-error --location \
+            "https://github.com/fleames/voidpaste-cli/releases/download/${TAG}/SHA256SUMS")"
+          hash() {
+            awk -v name="$1" '$2 == name { print $1 }' <<<"$sums"
+          }
+          payload="$(jq -n \
+            --arg version "$version" \
+            --arg darwin_amd64 "$(hash "voidpaste_${TAG}_darwin_amd64.tar.gz")" \
+            --arg darwin_arm64 "$(hash "voidpaste_${TAG}_darwin_arm64.tar.gz")" \
+            --arg linux_amd64 "$(hash "voidpaste_${TAG}_linux_amd64.tar.gz")" \
+            --arg linux_arm64 "$(hash "voidpaste_${TAG}_linux_arm64.tar.gz")" \
+            --arg windows_amd64 "$(hash "voidpaste_${TAG}_windows_amd64.zip")" \
+            --arg windows_arm64 "$(hash "voidpaste_${TAG}_windows_arm64.zip")" \
+            '{event_type:"voidpaste-release", client_payload:{
+              version:$version,
+              darwin_amd64:$darwin_amd64,
+              darwin_arm64:$darwin_arm64,
+              linux_amd64:$linux_amd64,
+              linux_arm64:$linux_arm64,
+              windows_amd64:$windows_amd64,
+              windows_arm64:$windows_arm64
+            }}')"
+          jq -e '.client_payload | to_entries | all(.value != "")' <<<"$payload" >/dev/null
+          for repo in homebrew-tap scoop-bucket; do
+            gh api --method POST "repos/fleames/${repo}/dispatches" --input - <<<"$payload"
+          done
