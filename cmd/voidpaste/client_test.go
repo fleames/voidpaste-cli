@@ -113,11 +113,11 @@ func TestClientCreateGetRawListDelete(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(Config{APIBase: srv.URL, APIKey: "vp_live_test"})
-	h, err := c.Health(t.Context())
+	h, err := c.Health(context.Background())
 	if err != nil || h["status"] != "ok" {
 		t.Fatalf("health: %v %v", h, err)
 	}
-	me, err := c.Me(t.Context())
+	me, err := c.Me(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestClientCreateGetRawListDelete(t *testing.T) {
 	if user["email"] != "cli@voidpaste.com" {
 		t.Fatalf("me: %v", me)
 	}
-	created, err := c.CreatePaste(t.Context(), CreatePasteInput{Content: "hello", Visibility: "unlisted"}, "")
+	created, err := c.CreatePaste(context.Background(), CreatePasteInput{Content: "hello", Visibility: "unlisted"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,25 +133,25 @@ func TestClientCreateGetRawListDelete(t *testing.T) {
 	if paste["id"] != "Abcd1234Efgh5678Ijkl" {
 		t.Fatalf("create: %v", created)
 	}
-	got, err := c.GetPaste(t.Context(), "Abcd1234Efgh5678Ijkl", "")
+	got, err := c.GetPaste(context.Background(), "Abcd1234Efgh5678Ijkl", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got["paste"].(map[string]any)["content"] != "hello" {
 		t.Fatalf("get: %v", got)
 	}
-	raw, err := c.RawPaste(t.Context(), "Abcd1234Efgh5678Ijkl", "")
+	raw, err := c.RawPaste(context.Background(), "Abcd1234Efgh5678Ijkl", "")
 	if err != nil || string(raw) != "hello" {
 		t.Fatalf("raw: %q %v", raw, err)
 	}
-	list, err := c.ListPastes(t.Context(), 10, 0)
+	list, err := c.ListPastes(context.Background(), 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(list["pastes"].([]any)) != 1 {
 		t.Fatalf("list: %v", list)
 	}
-	if err := c.DeletePaste(t.Context(), "Abcd1234Efgh5678Ijkl"); err != nil {
+	if err := c.DeletePaste(context.Background(), "Abcd1234Efgh5678Ijkl"); err != nil {
 		t.Fatal(err)
 	}
 }
