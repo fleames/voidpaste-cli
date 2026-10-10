@@ -4,7 +4,23 @@ Command-line client for [VoidPaste](https://voidpaste.com).
 
 ## Install
 
-Download the archive for your OS and architecture from
+Homebrew on macOS or Linux:
+
+```bash
+brew install fleames/tap/voidpaste
+voidpaste version
+```
+
+Scoop on Windows:
+
+```powershell
+scoop bucket add fleames https://github.com/fleames/scoop-bucket
+scoop install fleames/voidpaste
+voidpaste version
+```
+
+You can also install a release archive directly. Download the archive for your
+OS and architecture from
 [GitHub Releases](https://github.com/fleames/voidpaste-cli/releases/latest).
 Every release includes `SHA256SUMS`, an SPDX JSON SBOM, and GitHub build
 provenance. Verify the checksum before extracting:
@@ -22,7 +38,7 @@ voidpaste version
 
 ```powershell
 # Windows amd64 example
-$version = "v0.4.0"
+$version = "v0.4.1"
 $archive = "voidpaste_${version}_windows_amd64.zip"
 Invoke-WebRequest "https://github.com/fleames/voidpaste-cli/releases/download/$version/$archive" -OutFile $archive
 Invoke-WebRequest "https://github.com/fleames/voidpaste-cli/releases/download/$version/SHA256SUMS" -OutFile SHA256SUMS
@@ -47,8 +63,8 @@ go install github.com/fleames/voidpaste-cli/cmd/voidpaste@v0.4.1
 ln -sf "$(which voidpaste)" "$(dirname "$(which voidpaste)")/vp"
 ```
 
-Homebrew, Scoop, and winget packages are not published yet; package-manager
-commands will be documented only after their manifests are accepted.
+The WinGet manifest is under review and will be documented only after it is
+accepted into the community repository.
 
 Docs: https://voidpaste.com/docs/cli · Integrations: https://voidpaste.com/docs/integrations
 
