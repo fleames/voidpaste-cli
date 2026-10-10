@@ -219,6 +219,28 @@ func TestClientCollectionsAndVersions(t *testing.T) {
 	}
 }
 
+func TestCreatePasteIdempotencyKey(t *testing.T) {
+	var gotKey string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/pastes", func(w http.ResponseWriter, r *http.Request) {
+		gotKey = r.Header.Get("Idempotency-Key")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"paste": map[string]any{"id": "Abcd1234Efgh5678Ijkl"},
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c := NewClient(Config{APIBase: srv.URL, APIKey: "vp_live_test"})
+	if _, err := c.CreatePaste(context.Background(), CreatePasteInput{Content: "x"}, "ci-run-42"); err != nil {
+		t.Fatal(err)
+	}
+	if gotKey != "ci-run-42" {
+		t.Fatalf("Idempotency-Key=%q", gotKey)
+	}
+}
+
 func TestInterspersedFlags(t *testing.T) {
 	fs := flag.NewFlagSet("raw", flag.ContinueOnError)
 	var api, password string
